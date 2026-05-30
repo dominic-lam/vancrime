@@ -169,6 +169,10 @@
   .warn{position:absolute;left:12px;right:12px;bottom:12px;z-index:1000;
     background:#3a2417;border:1px solid #7a4a22;color:#ffce9e;padding:10px 14px;
     border-radius:9px;font-size:13px;display:none}
+  /* section tab-bar: invisible on desktop (sections flow normally), a
+     real nav bar only on narrow screens (see media query below) */
+  .mnav{display:none}
+  .sect{display:contents}
   /* ---- mobile / narrow screens -------------------------------------- */
   @media(max-width:760px){
     /* drop the fixed-viewport two-pane layout for a single scrolling page:
@@ -185,6 +189,25 @@
     #map{inset:8px}
     /* 16px keeps iOS Safari from auto-zooming when a select gets focus */
     select{font-size:16px}
+    /* everything under the trend chart collapses behind a sticky tab nav */
+    .mnav{
+      display:flex;gap:6px;position:sticky;top:0;z-index:60;
+      margin:20px -16px 14px;padding:12px 16px;background:var(--rail);
+      border-top:1px solid var(--rail-edge);border-bottom:1px solid var(--rail-edge);
+    }
+    .mnav__tab{
+      flex:1;background:var(--field);border:1px solid var(--field-edge);
+      color:var(--ink-dim);border-radius:9px;padding:11px 6px;font:inherit;
+      font-size:14px;font-weight:700;letter-spacing:.03em;cursor:pointer;
+      transition:all .15s ease;
+    }
+    .mnav__tab.is-active{color:var(--accent);border-color:var(--accent);
+      background:rgba(70,224,192,.10)}
+    .sect{display:none}
+    .sect.is-active{display:block}
+    /* the active section sits flush under the nav — drop the leading divider */
+    .sect.is-active > .panel:first-child,
+    .sect.is-active > .fld:first-child{margin-top:0;padding-top:0;border-top:none}
   }
   @media(max-width:420px){
     .readout .big{font-size:30px}
@@ -221,22 +244,36 @@
       <div class="sparkmeta" id="sparkMeta"></div>
     </div>
 
-    <div class="panel">
-      <div class="phead">Top neighbourhoods <span class="hint">click to filter</span></div>
-      <ul class="ranklist" id="rankList"></ul>
+    <!-- On mobile, the sections below collapse behind this tab bar; on desktop
+         the .sect wrappers are display:contents so the stack flows unchanged. -->
+    <nav class="mnav" role="tablist" aria-label="Dashboard sections">
+      <button class="mnav__tab is-active" type="button" role="tab" data-tab="areas" aria-selected="true">Areas</button>
+      <button class="mnav__tab" type="button" role="tab" data-tab="filters" aria-selected="false">Filters</button>
+      <button class="mnav__tab" type="button" role="tab" data-tab="types" aria-selected="false">Types</button>
+    </nav>
+
+    <div class="sect is-active" data-sect="areas" role="tabpanel">
+      <div class="panel">
+        <div class="phead">Top neighbourhoods <span class="hint">click to filter</span></div>
+        <ul class="ranklist" id="rankList"></ul>
+      </div>
     </div>
 
-    <label class="fld"><span>Start Year-Month</span>
-      <select id="startSel"></select></label>
-    <label class="fld"><span>End Year-Month</span>
-      <select id="endSel"></select></label>
-    <label class="fld"><span>Neighbourhood</span>
-      <select id="hoodSel"></select></label>
+    <div class="sect" data-sect="filters" role="tabpanel">
+      <label class="fld"><span>Start Year-Month</span>
+        <select id="startSel"></select></label>
+      <label class="fld"><span>End Year-Month</span>
+        <select id="endSel"></select></label>
+      <label class="fld"><span>Neighbourhood</span>
+        <select id="hoodSel"></select></label>
+    </div>
 
-    <div class="panel">
-      <div class="phead">Crime-type mix <span class="hint">click to filter</span></div>
-      <ul class="ranklist" id="typeList"></ul>
-      <button id="typeToggle" class="moretoggle" type="button"></button>
+    <div class="sect" data-sect="types" role="tabpanel">
+      <div class="panel">
+        <div class="phead">Crime-type mix <span class="hint">click to filter</span></div>
+        <ul class="ranklist" id="typeList"></ul>
+        <button id="typeToggle" class="moretoggle" type="button"></button>
+      </div>
     </div>
 
     <button id="resetBtn" class="resetbtn" type="button">↺ Reset filters</button>
@@ -356,6 +393,24 @@ function buildControls(){
   document.querySelectorAll("#hoodModal [data-close]")
     .forEach(el=>el.addEventListener("click",closeModal));
   document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
+  initSectionTabs();
+}
+
+/* ---- mobile section tabs --------------------------------------------- */
+/* The tab bar only renders on narrow screens; on desktop the sections are
+   display:contents and these classes are inert, so this wiring is harmless. */
+function initSectionTabs(){
+  const tabs  = document.querySelectorAll(".mnav__tab");
+  const sects = document.querySelectorAll(".sect");
+  tabs.forEach(tab=>tab.addEventListener("click",()=>{
+    const name = tab.getAttribute("data-tab");
+    tabs.forEach(t=>{
+      const on = t===tab;
+      t.classList.toggle("is-active",on);
+      t.setAttribute("aria-selected", on?"true":"false");
+    });
+    sects.forEach(s=>s.classList.toggle("is-active",s.getAttribute("data-sect")===name));
+  }));
 }
 
 function onChange(e){
