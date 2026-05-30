@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vancouver Crime Analysis</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Spline+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --rail:#10151c; --rail-edge:#1d2530; --ink:#e7edf3; --ink-dim:#8d9bab;
+    --accent:#46e0c0; --field:#0a0e13; --field-edge:#283341;
+    /* sequential ramp (light -> hot), colour-blind-safe YlOrRd-ish */
+    --c0:#fff5d6; --c1:#fed976; --c2:#fd9d43; --c3:#f24f34; --c4:#b30d28; --c-none:#3a4350;
+    --header:#1f7a96;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:'Archivo',system-ui,sans-serif;color:var(--ink);
+    background:var(--field);display:flex;flex-direction:column;height:100vh;overflow:hidden;
+  }
+  header{
+    background:var(--header);padding:14px 22px;display:flex;align-items:center;gap:14px;
+    border-bottom:3px solid rgba(0,0,0,.25);flex:0 0 auto;
+  }
+  header h1{font-size:22px;font-weight:800;letter-spacing:-.01em;margin:0;color:#fff}
+  header .dot{width:11px;height:11px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 0 4px rgba(70,224,192,.22)}
+  .stamp{margin-left:auto;font-family:'Spline Sans Mono',monospace;font-size:11px;
+    color:rgba(255,255,255,.72);text-align:right;line-height:1.5}
+  .info{position:relative;display:inline-flex;align-items:center;cursor:help;outline:none}
+  .info__i{width:18px;height:18px;border-radius:50%;border:1.5px solid rgba(255,255,255,.6);
+    color:#fff;font-size:11px;font-weight:700;font-family:'Spline Sans Mono',monospace;
+    display:flex;align-items:center;justify-content:center;line-height:1}
+  .info:hover .info__i,.info:focus .info__i{border-color:#fff;background:rgba(255,255,255,.18)}
+  .info__pop{position:absolute;top:calc(100% + 10px);left:0;z-index:1500;width:286px;
+    background:var(--rail);border:1px solid var(--rail-edge);border-radius:10px;padding:12px 14px;
+    color:var(--ink);font-size:12px;line-height:1.55;font-weight:400;letter-spacing:0;
+    text-transform:none;box-shadow:0 12px 36px rgba(0,0,0,.5);opacity:0;visibility:hidden;
+    transform:translateY(-4px);transition:opacity .15s ease,transform .15s ease;pointer-events:none}
+  .info__pop b{display:block;font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--ink-dim);margin-bottom:6px;font-weight:700}
+  .info__pop a{color:var(--accent);text-decoration:none}
+  .info__pop a:hover{text-decoration:underline}
+  .info:hover .info__pop,.info:focus .info__pop,.info:focus-within .info__pop{
+    opacity:1;visibility:visible;transform:translateY(0);pointer-events:auto}
+  .ghbtn{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;
+    text-decoration:none;color:var(--ink-dim);border:1px solid var(--field-edge);border-radius:9px;
+    padding:10px 12px;font-size:12px;font-weight:600;letter-spacing:.04em;transition:all .15s ease}
+  .ghbtn:hover{color:var(--ink);border-color:var(--accent);box-shadow:0 0 0 3px rgba(70,224,192,.14)}
+  .ghbtn svg{width:15px;height:15px;fill:currentColor}
+  .wrap{display:flex;flex:1 1 auto;min-height:0}
+  aside{
+    width:320px;flex:0 0 320px;background:var(--rail);border-right:1px solid var(--rail-edge);
+    padding:22px 20px;overflow-y:auto;
+  }
+  .eyebrow{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--ink-dim);margin:0 0 20px;font-weight:600}
+  label.fld{display:block;margin:0 0 18px}
+  label.fld > span{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--ink-dim);margin-bottom:7px}
+  select{
+    width:100%;appearance:none;background:var(--field) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%238d9bab' stroke-width='1.6' fill='none'/></svg>") no-repeat right 12px center;
+    color:var(--ink);border:1px solid var(--field-edge);border-radius:9px;
+    padding:11px 34px 11px 13px;font:inherit;font-size:14px;cursor:pointer;
+  }
+  select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(70,224,192,.18)}
+  .readout{margin-top:6px;padding-top:18px;border-top:1px solid var(--rail-edge)}
+  .readout--top{margin-top:0;padding-top:0;border-top:none}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .chip{display:inline-flex;align-items:center;gap:7px;background:var(--field);
+    border:1px solid var(--field-edge);border-radius:999px;padding:5px 6px 5px 10px;
+    font-size:11.5px;color:var(--ink);max-width:100%}
+  .chip .ck{font-size:9px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-dim)}
+  .chip .cv{font-family:'Spline Sans Mono',monospace;font-weight:500;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;max-width:150px}
+  .chip--active{border-color:var(--accent);background:rgba(70,224,192,.10)}
+  .chip--default .cv{color:var(--ink-dim)}
+  .chip .cx{background:none;border:none;color:var(--ink-dim);cursor:pointer;font-size:14px;
+    line-height:1;padding:0 3px;border-radius:50%;display:flex;align-items:center}
+  .chip .cx:hover{color:var(--accent)}
+  .readout .big{font-family:'Spline Sans Mono',monospace;font-size:34px;font-weight:500;
+    color:var(--accent);line-height:1}
+  .readout .lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink-dim);margin-top:6px}
+  .readout .sub{font-size:12px;color:var(--ink-dim);margin-top:10px;line-height:1.5}
+  .panel{margin-top:20px;padding-top:18px;border-top:1px solid var(--rail-edge)}
+  .phead{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink-dim);margin-bottom:12px;display:flex;justify-content:space-between}
+  .phead .hint{font-weight:500;letter-spacing:0;text-transform:none;opacity:.7}
+  .spark{width:100%;height:62px;display:block;overflow:visible}
+  .spark path.area{fill:rgba(70,224,192,.13)}
+  .spark path.line{fill:none;stroke:var(--accent);stroke-width:1.6;
+    stroke-linejoin:round;stroke-linecap:round}
+  .spark circle{fill:var(--accent)}
+  .sparkmeta{font-family:'Spline Sans Mono',monospace;font-size:10.5px;color:var(--ink-dim);
+    margin-top:8px;display:flex;justify-content:space-between;gap:6px}
+  .sparkmeta .pk{color:var(--accent)}
+  .ranklist{list-style:none;margin:0;padding:0}
+  .ranklist li{margin:0 0 11px;cursor:pointer}
+  .ranklist li.empty{cursor:default;color:var(--ink-dim);font-size:12px;margin:0}
+  .ranklist .rrow{display:flex;justify-content:space-between;gap:8px;
+    font-size:12.5px;margin-bottom:5px}
+  .ranklist .rname{color:var(--ink);white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis}
+  .ranklist .rval{font-family:'Spline Sans Mono',monospace;color:var(--ink-dim);flex:0 0 auto}
+  .ranklist .rbar{height:6px;border-radius:3px;background:var(--field);overflow:hidden}
+  .ranklist .rbar i{display:block;height:100%;border-radius:3px;transition:width .25s ease}
+  .ranklist li:hover .rname{color:var(--accent)}
+  .ranklist li.active .rname{color:var(--accent);font-weight:700}
+  .ranklist li.active .rbar{box-shadow:0 0 0 1px var(--accent)}
+  .ranklist .rpct{font-family:'Spline Sans Mono',monospace;color:var(--ink-dim);
+    flex:0 0 auto;font-size:11px}
+  .resetbtn{width:100%;margin-top:14px;background:transparent;color:var(--ink-dim);
+    border:1px solid var(--field-edge);border-radius:9px;padding:10px 12px;
+    font:inherit;font-size:12px;font-weight:600;letter-spacing:.04em;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:7px;transition:all .15s ease}
+  .resetbtn:hover{color:var(--ink);border-color:var(--accent);
+    box-shadow:0 0 0 3px rgba(70,224,192,.14)}
+  .resetbtn:disabled{opacity:.4;cursor:default;box-shadow:none;
+    border-color:var(--field-edge);color:var(--ink-dim)}
+  .moretoggle{display:none;margin-top:6px;padding:4px 0;background:none;border:none;
+    color:var(--accent);font:inherit;font-size:11.5px;font-weight:600;
+    letter-spacing:.04em;cursor:pointer}
+  .moretoggle:hover{text-decoration:underline}
+  .modal[hidden]{display:none}
+  .modal{position:fixed;inset:0;z-index:2000;display:flex;align-items:center;
+    justify-content:center;padding:20px}
+  .modal__backdrop{position:absolute;inset:0;background:rgba(4,7,11,.66)}
+  .modal__card{position:relative;width:min(440px,100%);max-height:86vh;overflow:auto;
+    background:var(--rail);border:1px solid var(--rail-edge);border-radius:16px;
+    padding:24px;box-shadow:0 24px 70px rgba(0,0,0,.6)}
+  .modal__x{position:absolute;top:12px;right:14px;background:none;border:none;
+    color:var(--ink-dim);font-size:24px;line-height:1;cursor:pointer;padding:4px}
+  .modal__x:hover{color:var(--ink)}
+  .modal__card h2{margin:0;font-size:20px;font-weight:800;letter-spacing:-.01em;padding-right:28px}
+  .modal__sub{font-size:12px;color:var(--ink-dim);margin-top:5px}
+  .modal__big{font-family:'Spline Sans Mono',monospace;font-size:30px;color:var(--accent);
+    margin:16px 0 0;line-height:1}
+  .modal__big .u{font-family:'Archivo';font-size:11px;color:var(--ink-dim);
+    text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+  .modal__list{margin-top:12px}
+  .modal__list li{cursor:default}
+  .modal__list .rval{color:var(--ink)}
+  .modal__empty{color:var(--ink-dim);font-size:13px;margin-top:12px}
+  .modal__foot{margin-top:20px;padding-top:16px;border-top:1px solid var(--rail-edge)}
+  .btn-accent{width:100%;background:var(--accent);color:#06231d;border:none;border-radius:9px;
+    padding:11px 12px;font:inherit;font-weight:700;font-size:13px;cursor:pointer}
+  .btn-accent:hover{filter:brightness(1.08)}
+  main{flex:1 1 auto;position:relative;min-width:0}
+  #map{position:absolute;inset:12px;border-radius:12px;overflow:hidden;
+    box-shadow:0 10px 40px rgba(0,0,0,.35)}
+  .legend{background:rgba(16,21,28,.94);color:var(--ink);padding:12px 14px;border-radius:10px;
+    font-size:12px;line-height:1.9;border:1px solid var(--rail-edge);
+    box-shadow:0 6px 20px rgba(0,0,0,.4)}
+  .legend b{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink-dim);margin-bottom:8px;font-weight:700}
+  .legend i{width:14px;height:14px;display:inline-block;margin-right:8px;border-radius:3px;
+    vertical-align:-2px}
+  .leaflet-tooltip.hood{background:#0a0e13;border:1px solid var(--accent);color:var(--ink);
+    font-family:'Archivo';border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.5);padding:8px 11px}
+  .leaflet-tooltip.hood .hn{font-weight:800;font-size:13px}
+  .leaflet-tooltip.hood .hc{font-family:'Spline Sans Mono',monospace;color:var(--accent);
+    font-size:18px;margin-top:2px}
+  .leaflet-tooltip.hood::before{display:none}
+  .warn{position:absolute;left:12px;right:12px;bottom:12px;z-index:1000;
+    background:#3a2417;border:1px solid #7a4a22;color:#ffce9e;padding:10px 14px;
+    border-radius:9px;font-size:13px;display:none}
+  @media(max-width:760px){
+    .wrap{flex-direction:column}
+    aside{width:100%;flex:0 0 auto;max-height:46%}
+    #map{inset:8px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <h1>Vancouver Crime Analysis</h1>
+  <span class="info" tabindex="0" role="button" aria-label="Data source">
+    <span class="info__i">i</span>
+    <span class="info__pop" role="tooltip">
+      <b>Data source</b>
+      Crime incidents: <a href="https://geodash.vpd.ca/opendata/" target="_blank" rel="noopener">VPD GeoDASH open data</a> (2003–present), refreshed weekly.<br>
+      Neighbourhood boundaries: <a href="https://opendata.vancouver.ca/explore/dataset/local-area-boundary/" target="_blank" rel="noopener">City of Vancouver Open Data</a>.
+    </span>
+  </span>
+  <div class="stamp" id="stamp">loading…</div>
+</header>
+
+<div class="wrap">
+  <aside>
+    <div class="readout readout--top">
+      <div class="big" id="totalOut">—</div>
+      <div class="lbl">incidents in selection</div>
+      <div class="chips" id="chips"></div>
+    </div>
+
+    <div class="panel">
+      <div class="phead">Monthly trend</div>
+      <svg id="spark" class="spark" viewBox="0 0 280 62" preserveAspectRatio="none"></svg>
+      <div class="sparkmeta" id="sparkMeta"></div>
+    </div>
+
+    <div class="panel">
+      <div class="phead">Top neighbourhoods <span class="hint">click to filter</span></div>
+      <ul class="ranklist" id="rankList"></ul>
+    </div>
+
+    <label class="fld"><span>Start Year-Month</span>
+      <select id="startSel"></select></label>
+    <label class="fld"><span>End Year-Month</span>
+      <select id="endSel"></select></label>
+    <label class="fld"><span>Neighbourhood</span>
+      <select id="hoodSel"></select></label>
+
+    <div class="panel">
+      <div class="phead">Crime-type mix <span class="hint">click to filter</span></div>
+      <ul class="ranklist" id="typeList"></ul>
+      <button id="typeToggle" class="moretoggle" type="button"></button>
+    </div>
+
+    <button id="resetBtn" class="resetbtn" type="button">↺ Reset filters</button>
+
+    <a class="ghbtn" href="https://github.com/dominic-lam/vancrime" target="_blank" rel="noopener">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      View on GitHub
+    </a>
+  </aside>
+
+  <main>
+    <div id="map"></div>
+    <div class="warn" id="warn"></div>
+  </main>
+</div>
+
+<div class="modal" id="hoodModal" hidden>
+  <div class="modal__backdrop" data-close></div>
+  <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <button class="modal__x" data-close aria-label="Close">×</button>
+    <h2 id="modalTitle">—</h2>
+    <div class="modal__sub" id="modalSub"></div>
+    <div class="modal__big"><span id="modalTotal">—</span> <span class="u">incidents</span></div>
+    <div class="phead" style="margin-top:18px">Breakdown by crime type</div>
+    <ul class="ranklist modal__list" id="modalList"></ul>
+    <div class="modal__foot">
+      <button class="btn-accent" id="modalFilterBtn" type="button">Filter dashboard to this area</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+<script>
+/* ---- config ---------------------------------------------------------- */
+const CUBE_URL   = "data/crime_cube.json";
+const GEOJSON_URL= "data/local-areas.geojson";
+/* Property of the geojson feature that holds the neighbourhood name.
+   Common values: "name", "NAME", "LOCAL_AREA", "Geom Name". Auto-detected below. */
+const GEO_NAME_KEYS = ["name","NAME","Name","LOCAL_AREA","local_area","Geom Name","mapid"];
+
+/* Name reconciliation: geojson label -> cube neighbourhood.
+   Add entries here if the warning bar reports unmatched polygons. */
+const NAME_FIX = {
+  "Arbutus-Ridge":"Arbutus Ridge",
+  "Downtown":"Central Business District",
+  "Dunbar Southlands":"Dunbar-Southlands",
+  "Grandview Woodland":"Grandview-Woodland",
+  "Hastings Sunrise":"Hastings-Sunrise",
+  "Kensington-Cedar Cottage":"Kensington-Cedar Cottage",
+  "Riley Park":"Riley Park",
+  "West End":"West End",
+};
+
+const norm = s => (s||"").toString().trim();
+const fix  = s => NAME_FIX[norm(s)] || norm(s);
+
+/* ---- state ----------------------------------------------------------- */
+let CUBE, META, map, geoLayer;
+let layersByHood = {};       // cube hood name -> leaflet layer
+let typeFilter = "__all__";  // crime-type filter (set by clicking the type-mix panel)
+let typesExpanded = false;   // crime-type panel: top-3 vs full list
+let lastPerType = [];        // cached per-type totals so the expand toggle needn't recompute
+const RAMP = ["--c0","--c1","--c2","--c3","--c4"].map(v =>
+  getComputedStyle(document.documentElement).getPropertyValue(v).trim());
+const NONE = getComputedStyle(document.documentElement).getPropertyValue("--c-none").trim();
+
+/* breakpoints recomputed per filter so the ramp always spans the live data */
+let BREAKS = [0,1,1,1,1];
+
+function colourFor(v){
+  if(v<=0) return NONE;
+  for(let i=BREAKS.length-1;i>=0;i--) if(v>=BREAKS[i]) return RAMP[i];
+  return RAMP[0];
+}
+
+/* ---- load ------------------------------------------------------------ */
+Promise.all([
+  fetch(CUBE_URL).then(r=>{if(!r.ok)throw new Error("cube "+r.status);return r.json();}),
+  fetch(GEOJSON_URL).then(r=>r.ok?r.json():null).catch(()=>null),
+]).then(([cube, geo])=>{
+  CUBE=cube; META=cube.meta;
+  document.getElementById("stamp").innerHTML =
+    `generated ${META.generated_utc}<br>${META.total_incidents.toLocaleString()} incidents · `+
+    `${META.months[0]} – ${META.months.at(-1)}`;
+  buildControls();
+  // The map needs Leaflet (a remote CDN script); the cube-driven panels don't.
+  // Isolate map init so a slow/blocked Leaflet load can't blank the analytics.
+  try{
+    if(typeof L==="undefined") throw new Error("Leaflet (map library) not loaded");
+    initMap(geo);
+  }catch(mapErr){
+    showWarn("Map unavailable ("+mapErr.message+"). Filters, trend and rankings still work.");
+  }
+  recompute();
+}).catch(err=>{
+  document.getElementById("stamp").textContent = "load failed";
+  showWarn("Could not load data: "+err.message+
+    " — confirm data/crime_cube.json exists (run scripts/aggregate.py).");
+});
+
+function buildControls(){
+  const ms=META.months;
+  const opt=(v,t)=>`<option value="${v}">${t||v}</option>`;
+  startSel.innerHTML = ms.map(m=>opt(m)).join("");
+  endSel.innerHTML   = ms.map(m=>opt(m)).join("");
+  startSel.value=ms[0]; endSel.value=ms.at(-1);
+  hoodSel.innerHTML = opt("__all__","All Neighbourhood")+
+                      META.neighbourhoods.map(n=>opt(n)).join("");
+  [startSel,endSel,hoodSel].forEach(el=>el.addEventListener("change",onChange));
+  resetBtn.addEventListener("click",resetFilters);
+  typeToggle.addEventListener("click",()=>{
+    typesExpanded=!typesExpanded;
+    renderTypes(lastPerType, typeFilter);   // cheap re-render, no full recompute
+  });
+  document.querySelectorAll("#hoodModal [data-close]")
+    .forEach(el=>el.addEventListener("click",closeModal));
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
+}
+
+function onChange(e){
+  if(e.target===startSel && startSel.value>endSel.value) endSel.value=startSel.value;
+  if(e.target===endSel   && endSel.value<startSel.value) startSel.value=endSel.value;
+  recompute();
+}
+
+/* ---- map ------------------------------------------------------------- */
+function initMap(geo){
+  map = L.map("map",{zoomControl:true}).setView([49.252,-123.12],12);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+    maxZoom:19, attribution:'© OpenStreetMap, ODbL'
+  }).addTo(map);
+
+  if(!geo){
+    showWarn("Choropleth disabled: data/local-areas.geojson missing. "+
+      "Download Vancouver 'local-area-boundary' GeoJSON (see README) and drop it in /data.");
+    return;
+  }
+  // auto-detect the name property
+  const props = geo.features[0]?.properties || {};
+  const nameKey = GEO_NAME_KEYS.find(k=>k in props) || Object.keys(props)[0];
+
+  const unmatched=[];
+  geoLayer = L.geoJSON(geo,{
+    style:()=>({weight:1,color:"#10151c",fillOpacity:.82,fillColor:NONE}),
+    onEachFeature:(f,layer)=>{
+      const raw = f.properties[nameKey];
+      const hood = fix(raw);
+      if(!META.neighbourhoods.includes(hood)) unmatched.push(raw);
+      layer._hood = hood;
+      layersByHood[hood]=layer;
+      layer.on("mouseover",()=>layer.setStyle({weight:3,color:"#46e0c0"}));
+      layer.on("mouseout", ()=>layer.setStyle({weight:1,color:"#10151c"}));
+      layer.on("click", ()=>{ openHoodModal(hood); });
+    }
+  }).addTo(map);
+  try{ map.fitBounds(geoLayer.getBounds(),{padding:[10,10]}); }catch(_){}
+
+  if(unmatched.length)
+    showWarn("Unmatched polygons (add to NAME_FIX in index.html): "+
+      [...new Set(unmatched)].join(", "));
+
+  addLegend();
+}
+
+function addLegend(){
+  const lg=L.control({position:"bottomright"});
+  lg.onAdd=()=>{ const d=L.DomUtil.create("div","legend"); d.id="legendBox"; return d; };
+  lg.addTo(map);
+}
+function renderLegend(){
+  const b=document.getElementById("legendBox"); if(!b)return;
+  const fmt=n=>n>=1000?(n/1000).toFixed(n%1000?1:0)+"k":n;
+  let rows=`<i style="background:${NONE}"></i>0`;
+  for(let i=0;i<RAMP.length;i++){
+    const lo=BREAKS[i], hi=i<RAMP.length-1?BREAKS[i+1]-1:null;
+    rows+=`<br><i style="background:${RAMP[i]}"></i>${fmt(lo)}${hi!==null?` – ${fmt(hi)}`:"+"}`;
+  }
+  b.innerHTML=`<b>Crime Count</b>${rows}`;
+}
+
+/* ---- core compute ---------------------------------------------------- */
+function monthsInRange(){
+  const a=startSel.value,b=endSel.value;
+  return META.months.filter(m=>m>=a&&m<=b);
+}
+function typeIndices(){
+  if(typeFilter==="__all__") return META.types.map((_,i)=>i);
+  return [META.types.indexOf(typeFilter)];
+}
+
+function recompute(){
+  const months=monthsInRange();
+  const tIdx=typeIndices();
+  const perHood=new Array(META.neighbourhoods.length).fill(0);
+
+  for(const m of months){
+    const bucket=CUBE.data[m]; if(!bucket)continue;
+    for(const ti of tIdx){
+      const arr=bucket[String(ti)]; if(!arr)continue;
+      for(let h=0;h<arr.length;h++) perHood[h]+=arr[h];
+    }
+  }
+
+  // total respects neighbourhood filter; map always shows all polygons
+  const hoodFilter=hoodSel.value;
+  const hf = hoodFilter==="__all__" ? -1 : META.neighbourhoods.indexOf(hoodFilter);
+  let total=0;
+  if(hf<0) total=perHood.reduce((a,b)=>a+b,0);
+  else total=perHood[hf]||0;
+
+  // per-type totals for the type-mix panel — over ALL types (independent of the
+  // type filter) so the panel always shows the full breakdown; respects the
+  // month range and neighbourhood filter.
+  const perType=new Array(META.types.length).fill(0);
+  for(const m of months){
+    const bucket=CUBE.data[m]; if(!bucket)continue;
+    for(let ti=0;ti<META.types.length;ti++){
+      const arr=bucket[String(ti)]; if(!arr)continue;
+      if(hf>=0) perType[ti]+=arr[hf]||0;
+      else for(let h=0;h<arr.length;h++) perType[ti]+=arr[h];
+    }
+  }
+
+  lastPerType = perType;
+  computeBreaks(perHood);
+  paint(perHood, hoodFilter);
+
+  totalOut.textContent=total.toLocaleString();
+  renderChips(months);
+  renderLegend();
+  renderTrend(months, tIdx, hoodFilter);
+  renderTypes(perType, typeFilter);
+  renderRanks(perHood, hoodFilter);
+  resetBtn.disabled = isDefaultFilters();
+}
+
+/* ---- reset filters --------------------------------------------------- */
+function isDefaultFilters(){
+  return startSel.value===META.months[0] && endSel.value===META.months.at(-1)
+      && typeFilter==="__all__" && hoodSel.value==="__all__";
+}
+function resetFilters(){
+  startSel.value=META.months[0];
+  endSel.value=META.months.at(-1);
+  typeFilter="__all__";
+  hoodSel.value="__all__";
+  recompute();
+}
+
+/* ---- active-filter chips --------------------------------------------- */
+const esc = s => String(s).replace(/[&<>"]/g,c=>(
+  {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function clearFilter(kind){
+  if(kind==="range"){ startSel.value=META.months[0]; endSel.value=META.months.at(-1); }
+  else if(kind==="type"){ typeFilter="__all__"; }
+  else if(kind==="hood"){ hoodSel.value="__all__"; }
+  recompute();
+}
+
+function renderChips(months){
+  const fullRange = startSel.value===META.months[0] && endSel.value===META.months.at(-1);
+  const chip=(kind,label,value,active)=>{
+    const cls = active ? "chip chip--active" : "chip chip--default";
+    const x = active ? `<button class="cx" data-clear="${kind}" `+
+      `aria-label="clear ${label}" title="clear">×</button>` : "";
+    return `<span class="${cls}"><span class="ck">${label}</span>`+
+      `<span class="cv">${esc(value)}</span>${x}</span>`;
+  };
+  const chips=[
+    chip("range","Range",`${startSel.value} → ${endSel.value} · ${months.length} mo`, !fullRange),
+  ];
+  if(typeFilter!=="__all__")     chips.push(chip("type","Type", typeFilter, true));
+  if(hoodSel.value!=="__all__")  chips.push(chip("hood","Area", hoodSel.value, true));
+  const box=document.getElementById("chips");
+  box.innerHTML=chips.join("");
+  box.querySelectorAll("button[data-clear]").forEach(b=>
+    b.addEventListener("click",()=>clearFilter(b.getAttribute("data-clear"))));
+}
+
+/* ---- crime-type mix -------------------------------------------------- */
+function selectType(name){
+  typeFilter = (typeFilter===name) ? "__all__" : name;
+  recompute();
+}
+function renderTypes(perType, activeType){
+  const total=perType.reduce((a,b)=>a+b,0);
+  const rows=META.types
+    .map((name,idx)=>({name, count:perType[idx]||0}))
+    .filter(r=>r.count>0)
+    .sort((a,b)=>b.count-a.count);
+  const ul=document.getElementById("typeList");
+  const toggle=document.getElementById("typeToggle");
+  if(!rows.length){
+    ul.innerHTML=`<li class="empty">No incidents in this selection.</li>`;
+    toggle.style.display="none";
+    return;
+  }
+  const max=rows[0].count;
+  const COLLAPSED=3;
+  // collapsed view shows the top 3, but always keeps the active type visible
+  let visible=rows;
+  if(!typesExpanded){
+    visible=rows.slice(0,COLLAPSED);
+    if(activeType!=="__all__" && !visible.some(r=>r.name===activeType)){
+      const a=rows.find(r=>r.name===activeType);
+      if(a) visible=[...visible,a];
+    }
+  }
+  ul.innerHTML=visible.map(r=>{
+    const frac=r.count/max;
+    const w=Math.max(4,frac*100);
+    const pct=total?r.count/total*100:0;
+    // colour by relative size within the panel (self-contained ramp, not the map breaks)
+    const colour=RAMP[Math.min(RAMP.length-1, Math.floor(frac*(RAMP.length-1e-6)))];
+    const active=r.name===activeType?" active":"";
+    const safe=r.name.replace(/"/g,"&quot;");
+    return `<li class="${active.trim()}" data-type="${safe}">`+
+      `<div class="rrow"><span class="rname">${r.name}</span>`+
+      `<span class="rpct">${pct.toFixed(pct<10?1:0)}%</span></div>`+
+      `<div class="rbar"><i style="width:${w.toFixed(1)}%;background:${colour}"></i></div>`+
+      `</li>`;
+  }).join("");
+  ul.querySelectorAll("li[data-type]").forEach(li=>
+    li.addEventListener("click",()=>selectType(li.getAttribute("data-type"))));
+  // expand / collapse control (only when there's more than the collapsed count)
+  if(rows.length>COLLAPSED){
+    toggle.style.display="block";
+    toggle.textContent = typesExpanded ? "▴ Show top 3" : `▾ Show all ${rows.length} types`;
+  }else{
+    toggle.style.display="none";
+  }
+}
+
+/* set the neighbourhood filter; clicking the active one clears back to citywide */
+function selectHood(name){
+  hoodSel.value = (hoodSel.value===name) ? "__all__" : name;
+  recompute();
+}
+
+/* ---- per-area breakdown modal ---------------------------------------- */
+function closeModal(){ document.getElementById("hoodModal").hidden = true; }
+
+function openHoodModal(name){
+  const hi = META.neighbourhoods.indexOf(name);
+  if(hi < 0) return;                       // polygon with no matching cube data
+  const months = monthsInRange();          // respect the active date range
+  const perType = new Array(META.types.length).fill(0);
+  for(const m of months){
+    const bucket = CUBE.data[m]; if(!bucket) continue;
+    for(let ti=0; ti<META.types.length; ti++){
+      const arr = bucket[String(ti)]; if(!arr) continue;
+      perType[ti] += arr[hi] || 0;
+    }
+  }
+  const total = perType.reduce((a,b)=>a+b,0);
+  const rows = META.types
+    .map((nm,idx)=>({name:nm, count:perType[idx]||0}))
+    .filter(r=>r.count>0)
+    .sort((a,b)=>b.count-a.count);
+
+  document.getElementById("modalTitle").textContent = name;
+  document.getElementById("modalSub").textContent =
+    `${startSel.value} → ${endSel.value} · ${months.length} month${months.length>1?"s":""}`;
+  document.getElementById("modalTotal").textContent = total.toLocaleString();
+
+  const ul = document.getElementById("modalList");
+  if(!rows.length){
+    ul.innerHTML = `<li class="modal__empty">No incidents in this area for the selected range.</li>`;
+  }else{
+    const max = rows[0].count;
+    ul.innerHTML = rows.map(r=>{
+      const frac = r.count/max, w = Math.max(4, frac*100);
+      const pct = total ? r.count/total*100 : 0;
+      const colour = RAMP[Math.min(RAMP.length-1, Math.floor(frac*(RAMP.length-1e-6)))];
+      return `<li><div class="rrow"><span class="rname">${esc(r.name)}</span>`+
+        `<span class="rval">${r.count.toLocaleString()} · ${pct.toFixed(pct<10?1:0)}%</span></div>`+
+        `<div class="rbar"><i style="width:${w.toFixed(1)}%;background:${colour}"></i></div></li>`;
+    }).join("");
+  }
+
+  document.getElementById("modalFilterBtn").onclick = ()=>{
+    hoodSel.value = name; closeModal(); recompute();
+  };
+  document.getElementById("hoodModal").hidden = false;
+}
+
+/* ---- monthly trend sparkline ----------------------------------------- */
+function renderTrend(months, tIdx, hoodFilter){
+  const hi = hoodFilter==="__all__" ? -1 : META.neighbourhoods.indexOf(hoodFilter);
+  const series = months.map(m=>{
+    const bucket=CUBE.data[m]; if(!bucket) return 0;
+    let s=0;
+    for(const ti of tIdx){
+      const arr=bucket[String(ti)]; if(!arr) continue;
+      if(hi>=0) s+=arr[hi]||0;
+      else for(let h=0;h<arr.length;h++) s+=arr[h];
+    }
+    return s;
+  });
+  const svg=document.getElementById("spark");
+  const meta=document.getElementById("sparkMeta");
+  const W=280,H=62,pad=3, n=series.length;
+  const rawMax = n?Math.max(...series):0;
+  if(!n || rawMax<=0){
+    svg.innerHTML="";
+    meta.innerHTML=`<span>no incidents in range</span>`;
+    return;
+  }
+  const x=i=> n<=1 ? W/2 : pad + i*(W-2*pad)/(n-1);
+  const y=v=> H-pad - (v/rawMax)*(H-2*pad);
+  const pts=series.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+  const line=`M${pts.join("L")}`;
+  const area=`M${x(0).toFixed(1)},${H} L${pts.join("L")} L${x(n-1).toFixed(1)},${H} Z`;
+  const pk=series.indexOf(rawMax);
+  svg.innerHTML=`<path class="area" d="${area}"/><path class="line" d="${line}"/>`+
+    `<circle cx="${x(pk).toFixed(1)}" cy="${y(rawMax).toFixed(1)}" r="2.6"/>`;
+  meta.innerHTML=`<span>${months[0]}</span>`+
+    `<span class="pk">▲ ${months[pk]} · ${rawMax.toLocaleString()}</span>`+
+    `<span>${months.at(-1)}</span>`;
+}
+
+/* ---- top neighbourhoods ranked bars ---------------------------------- */
+function renderRanks(perHood, hoodFilter){
+  const rows=META.neighbourhoods
+    .map((name,idx)=>({name, count:perHood[idx]||0}))
+    .filter(r=>r.count>0)
+    .sort((a,b)=>b.count-a.count)
+    .slice(0,8);
+  const ul=document.getElementById("rankList");
+  if(!rows.length){ ul.innerHTML=`<li class="empty">No incidents in this selection.</li>`; return; }
+  const max=rows[0].count;
+  ul.innerHTML=rows.map(r=>{
+    const w=Math.max(4,(r.count/max)*100);
+    const active=r.name===hoodFilter?" active":"";
+    const safe=r.name.replace(/"/g,"&quot;");
+    return `<li class="${active.trim()}" data-hood="${safe}">`+
+      `<div class="rrow"><span class="rname">${r.name}</span>`+
+      `<span class="rval">${r.count.toLocaleString()}</span></div>`+
+      `<div class="rbar"><i style="width:${w.toFixed(1)}%;background:${colourFor(r.count)}"></i></div>`+
+      `</li>`;
+  }).join("");
+  ul.querySelectorAll("li[data-hood]").forEach(li=>
+    li.addEventListener("click",()=>selectHood(li.getAttribute("data-hood"))));
+}
+
+/* quantile-ish breaks over non-zero hoods so the ramp always has contrast */
+function computeBreaks(perHood){
+  const vals=perHood.filter(v=>v>0).sort((a,b)=>a-b);
+  if(!vals.length){BREAKS=[1,2,3,4,5];return;}
+  const q=p=>vals[Math.min(vals.length-1,Math.floor(p*vals.length))];
+  let b=[1, q(.2)||1, q(.4)||2, q(.6)||3, q(.8)||4];
+  // enforce strictly increasing
+  for(let i=1;i<b.length;i++) if(b[i]<=b[i-1]) b[i]=b[i-1]+1;
+  BREAKS=b;
+}
+
+function paint(perHood, hoodFilter){
+  if(!geoLayer)return;
+  geoLayer.eachLayer(layer=>{
+    const hi=META.neighbourhoods.indexOf(layer._hood);
+    const v=hi>=0?perHood[hi]:0;
+    const dim = hoodFilter!=="__all__" && layer._hood!==hoodFilter;
+    layer.setStyle({fillColor:colourFor(v), fillOpacity:dim?.18:.82});
+    layer.unbindTooltip();
+    if(hi>=0){
+      layer.bindTooltip(
+        `<div class="hn">${layer._hood}</div><div class="hc">${v.toLocaleString()}</div>`,
+        {className:"hood",sticky:true});
+    }
+  });
+}
+
+function showWarn(msg){const w=document.getElementById("warn");w.textContent=msg;w.style.display="block";}
+</script>
+</body>
+</html>

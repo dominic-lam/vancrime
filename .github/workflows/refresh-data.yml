@@ -1,0 +1,35 @@
+name: Refresh crime data
+
+on:
+  schedule:
+    # Mondays 16:00 UTC (~08:00 PT) — VPD publishes Sunday mornings.
+    - cron: "0 16 * * 1"
+  workflow_dispatch: {}   # manual "Run workflow" button
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build cube from VPD feed
+        run: python scripts/aggregate.py --download
+
+      - name: Commit if data changed
+        run: |
+          git config user.name  "vancrime-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if git diff --quiet -- data/crime_cube.json; then
+            echo "No change in crime_cube.json — nothing to commit."
+          else
+            git add data/crime_cube.json
+            git commit -m "data: weekly refresh $(date -u +%Y-%m-%d)"
+            git push
+          fi

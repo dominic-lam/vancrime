@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Local data scratch (raw VPD downloads, not the committed cube)
+*.zip
+crimedata_csv_*.csv
