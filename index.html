@@ -169,10 +169,26 @@
   .warn{position:absolute;left:12px;right:12px;bottom:12px;z-index:1000;
     background:#3a2417;border:1px solid #7a4a22;color:#ffce9e;padding:10px 14px;
     border-radius:9px;font-size:13px;display:none}
+  /* ---- mobile / narrow screens -------------------------------------- */
   @media(max-width:760px){
-    .wrap{flex-direction:column}
-    aside{width:100%;flex:0 0 auto;max-height:46%}
+    /* drop the fixed-viewport two-pane layout for a single scrolling page:
+       map as a hero on top, analytics + filters flowing below */
+    body{height:auto;min-height:100vh;overflow:auto}
+    header{padding:12px 16px;flex-wrap:wrap;gap:6px 12px}
+    header h1{font-size:18px}
+    .stamp{font-size:10px;flex-basis:100%;text-align:left;margin-left:0;order:3}
+    .info__pop{width:min(286px,calc(100vw - 32px))}
+    .wrap{flex-direction:column;flex:0 0 auto}
+    main{order:1;flex:0 0 auto;height:55vh;min-height:300px}
+    aside{order:2;width:100%;flex:0 0 auto;max-height:none;overflow:visible;
+      border-right:none;border-top:1px solid var(--rail-edge);padding:20px 16px}
     #map{inset:8px}
+    /* 16px keeps iOS Safari from auto-zooming when a select gets focus */
+    select{font-size:16px}
+  }
+  @media(max-width:420px){
+    .readout .big{font-size:30px}
+    main{height:50vh}
   }
 </style>
 </head>
@@ -354,6 +370,14 @@ function initMap(geo){
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
     maxZoom:19, attribution:'© OpenStreetMap, ODbL'
   }).addTo(map);
+
+  // The map container resizes when the layout reflows (e.g. phone rotation);
+  // Leaflet needs an explicit nudge to recompute tile/size geometry.
+  let resizeT;
+  window.addEventListener("resize",()=>{
+    clearTimeout(resizeT);
+    resizeT=setTimeout(()=>map.invalidateSize(),200);
+  });
 
   if(!geo){
     showWarn("Choropleth disabled: data/local-areas.geojson missing. "+

@@ -26,10 +26,17 @@ jobs:
         run: |
           git config user.name  "vancrime-bot"
           git config user.email "actions@users.noreply.github.com"
-          if git diff --quiet -- data/crime_cube.json; then
-            echo "No change in crime_cube.json — nothing to commit."
-          else
-            git add data/crime_cube.json
-            git commit -m "data: weekly refresh $(date -u +%Y-%m-%d)"
-            git push
+          # The cube's meta.generated_utc is rewritten every run, so a plain
+          # `git diff` is never empty. Compare against the committed cube with
+          # that timestamp stripped — commit only if the actual data changed.
+          if git show HEAD:data/crime_cube.json > /tmp/old_cube.json 2>/dev/null; then
+            old_sig=$(jq -S 'del(.meta.generated_utc)' /tmp/old_cube.json)
+            new_sig=$(jq -S 'del(.meta.generated_utc)' data/crime_cube.json)
+            if [ "$old_sig" = "$new_sig" ]; then
+              echo "Only generated_utc changed — nothing meaningful to commit."
+              exit 0
+            fi
           fi
+          git add data/crime_cube.json
+          git commit -m "data: weekly refresh $(date -u +%Y-%m-%d)"
+          git push

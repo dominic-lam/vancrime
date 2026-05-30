@@ -4,6 +4,10 @@ Static Leaflet choropleth of VPD crime data (2003–present), with a GitHub
 Actions cron that re-downloads the VPD feed weekly and commits a fresh data
 file. No server, no infra cost.
 
+**Live:** <https://dominic-lam.github.io/vancrime/>
+
+![Vancouver Crime Analysis dashboard](img/dashboard.png)
+
 ```
 vancrime/
 ├── index.html                     # the dashboard (static, CDN deps)
