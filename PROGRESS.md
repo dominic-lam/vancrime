@@ -14,3 +14,8 @@
 **Completed:** Enabled GitHub Pages — site is now live at https://dominic-lam.github.io/vancrime/; merged PR #1 adding a sticky section tab-bar (Areas / Filters / Types) on narrow screens using `display:contents` on desktop so it's fully inert outside mobile.
 **In progress:** Nothing.
 **Next session should:** Add shareable URL state (`#from=&to=&hood=&type=`) so users can link to a specific filter view on the live site.
+
+## 2026-07-03 (Session 4 — Config only)
+**Completed:** No project changes. Added global TARS-style persona and response style to `~/.claude/CLAUDE.md` and pushed to the synced config repo.
+**In progress:** Nothing.
+**Next session should:** Add shareable URL state (`#from=&to=&hood=&type=`) — unchanged priority.
